@@ -19,14 +19,8 @@
   .btn { display:block; width:100%; padding:15px; margin-top:20px; font-size:17px; font-weight:700; color:#fff; background:var(--green); border:none; border-radius:12px; cursor:pointer; }
   .btn:active { transform:scale(.98); }
   .btn.ghost { background:#e8eeeb; color:var(--dark); margin-top:10px; }
-  .pin-dots { display:flex; gap:12px; justify-content:center; margin:22px 0; }
-  .pin-dots span { width:18px; height:18px; border-radius:50%; border:2px solid var(--green); }
-  .pin-dots span.f { background:var(--green); }
-  .pinpad { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; max-width:280px; margin:0 auto; }
-  .pinpad button { padding:18px 0; font-size:22px; font-weight:700; border-radius:12px; border:1.5px solid #d7dedb; background:#fff; cursor:pointer; }
-  .pinpad button:active { background:#e8eeeb; }
-  .err { color:#b3261e; text-align:center; min-height:22px; font-size:14px; margin-top:10px; }
   .hidden { display:none !important; }
+  .saved-note { text-align:center; font-size:13px; color:var(--muted); margin-top:12px; min-height:18px; }
   /* ---- receipt ---- */
   #receipt { background:#fff; border-radius:14px; padding:28px 24px; box-shadow:0 2px 10px rgba(0,0,0,.07); }
   #receipt .r-head { text-align:center; border-bottom:2px solid var(--dark); padding-bottom:14px; margin-bottom:16px; }
@@ -37,10 +31,9 @@
   #receipt td.k { color:var(--muted); width:42%; }
   #receipt tr.total td { border-top:2px solid var(--dark); font-size:19px; font-weight:800; padding-top:12px; color:var(--dark); }
   #receipt .r-foot { text-align:center; margin-top:18px; font-size:13px; color:var(--muted); }
-  .screen-only { }
   @media print {
     body { background:#fff; }
-    .screen-only, .wrap > .card { display:none !important; }
+    .wrap { display:none !important; }
     #print-area { display:block !important; }
     #receipt { box-shadow:none; border-radius:0; padding:0; }
   }
@@ -50,24 +43,10 @@
 <body>
 <div class="wrap">
 
-  <!-- PIN gate -->
-  <div class="card screen-only" id="pin-screen">
-    <h1>Rest Inn Receipts</h1>
-    <p class="sub">Staff only — enter the 4-digit PIN.</p>
-    <div class="pin-dots" id="pin-dots"><span></span><span></span><span></span><span></span></div>
-    <div class="pinpad" id="pinpad">
-      <button data-d="1">1</button><button data-d="2">2</button><button data-d="3">3</button>
-      <button data-d="4">4</button><button data-d="5">5</button><button data-d="6">6</button>
-      <button data-d="7">7</button><button data-d="8">8</button><button data-d="9">9</button>
-      <button data-d="clear">⌫</button><button data-d="0">0</button><button data-d="ok">✓</button>
-    </div>
-    <div class="err" id="pin-err"></div>
-  </div>
-
   <!-- Form -->
-  <div class="card screen-only hidden" id="form-screen">
+  <div class="card" id="form-screen">
     <h1>New Receipt</h1>
-    <p class="sub">Fill the fields, then print. Receipt number is automatic.</p>
+    <p class="sub">Fill the fields, then print. The receipt is saved automatically.</p>
     <label>Guest name</label>
     <input id="f-guest" placeholder="e.g. Jane Smith" autocomplete="off">
     <label>Department / Company</label>
@@ -84,7 +63,7 @@
   </div>
 
   <!-- Receipt preview -->
-  <div class="screen-only hidden" id="preview-screen">
+  <div class="hidden" id="preview-screen">
     <div id="receipt">
       <div class="r-head">
         <h2>Rest Inn</h2>
@@ -103,8 +82,9 @@
       </table>
       <div class="r-foot">Thank you for staying with us.</div>
     </div>
-    <button class="btn screen-only" id="btn-print" style="margin-top:16px">Print receipt</button>
-    <button class="btn ghost screen-only" id="btn-new">New receipt</button>
+    <button class="btn" id="btn-print" style="margin-top:16px">Print &amp; save receipt</button>
+    <div class="saved-note" id="saved-note"></div>
+    <button class="btn ghost" id="btn-new">New receipt</button>
   </div>
 
 </div>
@@ -114,35 +94,8 @@
 
 <script>
 (function(){
-  var PIN = "4321";
-  var pin = "";
-  var dots = document.getElementById('pin-dots').children;
-  var err = document.getElementById('pin-err');
-
-  function drawPin(){
-    for (var i=0;i<4;i++) dots[i].className = i < pin.length ? 'f' : '';
-  }
-  document.getElementById('pinpad').addEventListener('click', function(e){
-    var b = e.target.closest('button'); if(!b) return;
-    var d = b.getAttribute('data-d');
-    err.textContent = '';
-    if (d === 'clear') { pin = pin.slice(0,-1); }
-    else if (d === 'ok') {
-      if (pin === PIN) {
-        document.getElementById('pin-screen').classList.add('hidden');
-        document.getElementById('form-screen').classList.remove('hidden');
-        pin = ''; drawPin(); return;
-      } else { err.textContent = 'Wrong PIN — try again.'; pin=''; }
-    }
-    else if (pin.length < 4) { pin += d; if (pin.length === 4) {
-      if (pin === PIN) {
-        document.getElementById('pin-screen').classList.add('hidden');
-        document.getElementById('form-screen').classList.remove('hidden');
-        pin='';
-      } else { err.textContent = 'Wrong PIN — try again.'; pin=''; }
-    }}
-    drawPin();
-  });
+  var SUPABASE_URL = 'https://vjaibkfckxauoxdsojfn.supabase.co/rest/v1/receipts';
+  var SUPABASE_ANON = 'sb_publishable_yqOFCrP8mBYm32x2cUYFYg_eHMDWB18';
 
   function val(id){ return document.getElementById(id).value.trim(); }
   function fmtDate(s){
@@ -160,40 +113,77 @@
     return 'RIR-' + d + '-' + String(n).padStart(3,'0');
   }
 
+  var current = null;
+
   document.getElementById('btn-preview').addEventListener('click', function(){
     var guest=val('f-guest'), dept=val('f-dept'), room=val('f-room'),
         cin=val('f-in'), cout=val('f-out'), amt=val('f-amount');
     if(!guest || !amt){ alert('Guest name and total amount are required.'); return; }
-    var nights='—';
+    var nights=null;
     if(cin && cout){
       var ms = new Date(cout) - new Date(cin);
       if(ms>0) nights = Math.round(ms/86400000);
     }
-    document.getElementById('r-no').textContent = receiptNo();
-    document.getElementById('r-date').textContent = fmtDate(new Date().toISOString().slice(0,10));
+    var today = new Date().toISOString().slice(0,10);
+    current = {
+      receipt_no: receiptNo(),
+      date_issued: today,
+      guest_name: guest,
+      department: dept || null,
+      room: room || null,
+      check_in: cin || null,
+      check_out: cout || null,
+      nights: nights,
+      amount: Number(amt)
+    };
+    document.getElementById('r-no').textContent = current.receipt_no;
+    document.getElementById('r-date').textContent = fmtDate(today);
     document.getElementById('r-guest').textContent = guest;
     document.getElementById('r-dept').textContent = dept || '—';
     document.getElementById('r-room').textContent = room || '—';
     document.getElementById('r-in').textContent = fmtDate(cin);
     document.getElementById('r-out').textContent = fmtDate(cout);
-    document.getElementById('r-nights').textContent = nights;
+    document.getElementById('r-nights').textContent = nights === null ? '—' : nights;
     document.getElementById('r-amount').textContent = money(amt);
+    document.getElementById('saved-note').textContent = '';
     document.getElementById('form-screen').classList.add('hidden');
     document.getElementById('preview-screen').classList.remove('hidden');
     window.scrollTo(0,0);
   });
 
+  function saveReceipt(data, done){
+    try {
+      fetch(SUPABASE_URL, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON,
+          'Authorization': 'Bearer ' + SUPABASE_ANON,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(data)
+      }).then(function(r){ done(r.ok); }).catch(function(){ done(false); });
+    } catch(e){ done(false); }
+  }
+
   document.getElementById('btn-print').addEventListener('click', function(){
-    var area = document.getElementById('print-area');
-    area.innerHTML = '';
-    area.appendChild(document.getElementById('receipt').cloneNode(true));
-    window.print();
+    if(!current) return;
+    var note = document.getElementById('saved-note');
+    note.textContent = 'Saving…';
+    saveReceipt(current, function(ok){
+      note.textContent = ok ? '✓ Saved to the receipt log.' : 'Printed — save failed, check connection.';
+      var area = document.getElementById('print-area');
+      area.innerHTML = '';
+      area.appendChild(document.getElementById('receipt').cloneNode(true));
+      setTimeout(function(){ window.print(); }, 300);
+    });
   });
 
   document.getElementById('btn-new').addEventListener('click', function(){
     ['f-guest','f-dept','f-room','f-in','f-out','f-amount'].forEach(function(id){
       document.getElementById(id).value='';
     });
+    current = null;
     document.getElementById('preview-screen').classList.add('hidden');
     document.getElementById('form-screen').classList.remove('hidden');
     window.scrollTo(0,0);
